@@ -37,6 +37,18 @@ Here's an example command for launching a docker container environment. Please a
 ```bash
 docker run --gpus all --ipc=host --net=host --ulimit memlock=-1 --ulimit stack=67108864 -it --rm nvcr.io/nvidia/pytorch:25.02-py3 bash
 ```
+### Option 0: Direct installation with streamlit and grok
+
+
+```bash
+git clone https://github.com/boson-ai/higgs-audio.git
+cd higgs-audio
+
+pip install -r requirements.txt
+pip install -e .
+pip install -q streamlit pyngrok
+
+```
 
 ### Option 1: Direct installation
 
