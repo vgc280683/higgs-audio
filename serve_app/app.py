@@ -1,38 +1,33 @@
-import click
-import soundfile as sf
-import langid
-import jieba
+import copy
+import io
 import os
 import re
-import copy
-import torchaudio
+import time
+from dataclasses import asdict
+from typing import List
+from typing import Optional
+
+import langid
+import numpy as np
+import soundfile as sf
+import streamlit as st
+import torch
 import tqdm
 import yaml
-import streamlit as st
-import io
-
 from loguru import logger
-import time
+from transformers import AutoConfig, AutoTokenizer
+from transformers.cache_utils import StaticCache
 
-from boson_multimodal.serve.serve_engine import HiggsAudioServeEngine, HiggsAudioResponse
-from boson_multimodal.data_types import Message, ChatMLSample, AudioContent, TextContent
-from boson_multimodal.model.higgs_audio import HiggsAudioConfig, HiggsAudioModel
-from boson_multimodal.data_collator.higgs_audio_collator import HiggsAudioSampleCollator
 from boson_multimodal.audio_processing.higgs_audio_tokenizer import load_higgs_audio_tokenizer
+from boson_multimodal.data_collator.higgs_audio_collator import HiggsAudioSampleCollator
+from boson_multimodal.data_types import Message, ChatMLSample, AudioContent, TextContent
 from boson_multimodal.dataset.chatml_dataset import (
     ChatMLDatasetSample,
     prepare_chatml_sample,
 )
+from boson_multimodal.model.higgs_audio import HiggsAudioModel
 from boson_multimodal.model.higgs_audio.utils import revert_delay_pattern
-from typing import List
-from transformers import AutoConfig, AutoTokenizer
-from transformers.cache_utils import StaticCache
-from typing import Optional
-from dataclasses import asdict
-import torch
-import time
-import soundfile as sf
-import numpy as np
+
 
 def concatenate_audio(audio_paths, output_path):
     """
@@ -55,11 +50,11 @@ def concatenate_audio(audio_paths, output_path):
 
     audio_concat = np.concatenate(audios, axis=0)
     sf.write(output_path, audio_concat, sr_final)
+
+
 CURR_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
 AUDIO_PLACEHOLDER_TOKEN = "<|__AUDIO_PLACEHOLDER__|>"
-
 
 MULTISPEAKER_DEFAULT_SYSTEM_MESSAGE = """You are an AI assistant designed to convert text into speech.
 If the user's message includes a [SPEAKER*] tag, do not read out the tag and generate speech for the following text, using the specified voice.
@@ -89,6 +84,7 @@ def concatenate_audio(audio_paths, output_path, pause_duration=0.5):
     full_audio = np.concatenate(combined_audio)
     sf.write(output_path, full_audio, sample_rate)
 
+
 def dividir_texto_por_pausa(texto_largo, max_len=300):
     """
     Divide el texto por pausas naturales (puntos, signos de interrogación/exclamación, etc.)
@@ -112,12 +108,14 @@ def dividir_texto_por_pausa(texto_largo, max_len=300):
 
     return bloques
 
+
 def save_audio(audio, ruta_salida, samplerate=24000):
     """
     Guarda un array de audio como WAV en formato PCM 16 bits.
     """
     audio = np.array(audio).astype(np.float32)
     sf.write(ruta_salida, audio, samplerate)
+
 
 def concatenar_audios_con_pausa(lista_rutas, pausa_segundos=0.5, samplerate=24000):
     """
@@ -135,20 +133,21 @@ def concatenar_audios_con_pausa(lista_rutas, pausa_segundos=0.5, samplerate=2400
 
     return np.concatenate(resultado)
 
+
 def generar_audio_higgs(
-    text,
-    voice_path,
-    voice_name,
-    preset,
-    language,
-    scene_prompt,
-    model,
-    temperature=1.0,
-    top_k=50,
-    top_p=0.95,
-    ras_win_len=7,
-    ras_win_max_num_repeat=2,
-    seed=123
+        text,
+        voice_path,
+        voice_name,
+        preset,
+        language,
+        scene_prompt,
+        model,
+        temperature=1.0,
+        top_k=50,
+        top_p=0.95,
+        ras_win_len=7,
+        ras_win_max_num_repeat=2,
+        seed=123
 ):
     # === Normalizar texto ===
     processed_text = normalize_chinese_punctuation(text)
@@ -167,20 +166,19 @@ def generar_audio_higgs(
         audio_tokenizer=model._audio_tokenizer,
         speaker_tags=speaker_tags,
     )
-    
+
     if not processed_text.strip():
         raise ValueError("❌ Texto procesado vacío en generación.")
-    
 
     chunked_text = [f"SPEAKER0: {processed_text}"]  # ✔️
-    st.info(f"{chunked_text}.")    
+    st.info(f"{chunked_text}.")
     # NO AÑADIR este bloque a `messages`, porque ya lo hace el modelo internamente:
     # messages.append(Message(role="user", content=TextContent(...))) ❌
 
     concat_wav, sr, _ = model.generate(
-        messages,            # generado por prepare_generation_context
-        audio_ids,           # generado por prepare_generation_context
-        chunked_text,        # ✔️ cadena plana con el texto del hablante
+        messages,  # generado por prepare_generation_context
+        audio_ids,  # generado por prepare_generation_context
+        chunked_text,  # ✔️ cadena plana con el texto del hablante
         None,
         temperature,
         top_k,
@@ -191,16 +189,17 @@ def generar_audio_higgs(
     )
     return concat_wav, sr
 
-def generar_narracion_completa(
-    texto_largo,
-    voice_path,
-    voice_name,
-    preset,
-    language,
-    scene_prompt,
-    output_dir,
-    model,  # Ahora sí lo usamos correctamente
-    pause_duration=0.5
+
+def generar_narracion_completa_old(
+        texto_largo,
+        voice_path,
+        voice_name,
+        preset,
+        language,
+        scene_prompt,
+        output_dir,
+        model,
+        pause_duration=0.5
 ):
     from datetime import datetime
 
@@ -220,13 +219,13 @@ def generar_narracion_completa(
     st.markdown(f"Se han detectado **{len(bloques)} bloques** de texto para generar.")
     with st.expander("Ver bloques detectados"):
         for i, b in enumerate(bloques):
-            st.write(f"**Bloque {i+1}:** {b}")
+            st.write(f"**Bloque {i + 1}:** {b}")
 
     for i, bloque in enumerate(bloques):
-        nombre_archivo = f"{timestamp}_frase{i+1}.wav"
+        nombre_archivo = f"{timestamp}_frase{i + 1}.wav"
         ruta_salida = os.path.join(carpeta_salida, nombre_archivo)
 
-        st.markdown(f"🔄 Generando bloque `{i+1}/{len(bloques)}`:")
+        st.markdown(f"🔄 Generando bloque `{i + 1}/{len(bloques)}`:")
         status_text = st.empty()
         progress_bar = st.progress(i / len(bloques))
 
@@ -248,11 +247,11 @@ def generar_narracion_completa(
         t1 = time.time()
         duraciones.append(t1 - t0)
         log_panel.markdown(f"""
-**🟢 Bloque {i+1}/{len(bloques)}**
+**🟢 Bloque {i + 1}/{len(bloques)}**
 - ⏱️ Tiempo: `{t1 - t0:.2f} s`
 - 🗣️ Texto: `{bloque[:100]}{"..." if len(bloque) > 100 else ""}`
 """)
-        status_text.markdown(f"✅ Bloque `{i+1}` generado en **{t1 - t0:.2f} s**")
+        status_text.markdown(f"✅ Bloque `{i + 1}` generado en **{t1 - t0:.2f} s**")
         progress_bar.progress((i + 1) / len(bloques))
         audios.append(ruta_salida)
 
@@ -292,6 +291,120 @@ def generar_narracion_completa(
         "ruta_audio_final": ruta_audio_final,
         "duraciones": duraciones,
         "archivos_individuales": audios,
+        "carpeta_salida": carpeta_salida
+    }
+
+def generar_narracion_completa(
+    texto_largo,
+    voice_path,
+    voice_name,
+    preset,
+    language,
+    scene_prompt,
+    output_dir,
+    model,
+    pause_duration=0.5,
+    temperature=1.0,
+    top_k=50,
+    top_p=0.95,
+    ras_win_len=7,
+    ras_win_max_num_repeat=2,
+    seed=123
+):
+    from datetime import datetime
+    import json
+
+    # === Crear subcarpeta con timestamp ===
+    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
+    carpeta_salida = os.path.join(output_dir, timestamp)
+    os.makedirs(carpeta_salida, exist_ok=True)
+
+    # === Panel lateral de log ===
+    log_panel = st.sidebar.expander("📋 Log de generación en tiempo real", expanded=True)
+    log_panel.markdown("Iniciando generación...")
+
+    # === Dividir en frases/bloques naturales ===
+    bloques = dividir_texto_por_pausa(texto_largo)
+    chunked_text = [f"SPEAKER0: {bloque}" for bloque in bloques]
+
+    st.subheader("🧾 Frases detectadas:")
+    st.markdown(f"Se han detectado **{len(chunked_text)} bloques** de texto para generar.")
+    with st.expander("Ver bloques detectados"):
+        for i, b in enumerate(chunked_text):
+            st.write(f"**Bloque {i+1}:** {b}")
+
+    # === Preparar contexto para generación coherente ===
+    messages, audio_ids = prepare_generation_context(
+        scene_prompt=scene_prompt,
+        ref_audio=voice_name,
+        ref_audio_in_system_message=True,
+        audio_tokenizer=model._audio_tokenizer,
+        speaker_tags=["SPEAKER0"],
+    )
+
+    if messages is None:
+        st.error("❌ Error al preparar el contexto. Revisa el nombre del prompt de voz y los archivos en voice_examples.")
+        return
+
+    # === Generación única con todos los bloques ===
+    st.markdown("🔊 **Generando audio completo...**")
+    t0 = time.time()
+
+    audio, sr, _ = model.generate(
+        messages=messages,
+        audio_ids=audio_ids,
+        chunked_text=chunked_text,
+        generation_chunk_buffer_size=None,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
+        ras_win_len=ras_win_len,
+        ras_win_max_num_repeat=ras_win_max_num_repeat,
+        seed=seed,
+    )
+
+    t1 = time.time()
+    duracion_total = t1 - t0
+
+    log_panel.markdown(f"🟢 Audio completo generado en **{duracion_total:.2f} s**")
+
+    # === Guardar audio final ===
+    ruta_audio_final = os.path.join(carpeta_salida, f"{timestamp}_completo.wav")
+    save_audio(audio, ruta_audio_final, sr)
+
+    # === Estimar duración por bloque (distribución proporcional simple) ===
+    duracion_media = duracion_total / len(chunked_text)
+    duraciones = [duracion_media] * len(chunked_text)
+
+    # === Guardar log JSON ===
+    log_info = {
+        "timestamp": timestamp,
+        "scene_prompt": scene_prompt,
+        "language": language,
+        "preset": preset,
+        "voice_name": voice_name,
+        "voice_path": voice_path,
+        "output_dir": carpeta_salida,
+        "num_bloques": len(chunked_text),
+        "bloques": [
+            {
+                "bloque": i + 1,
+                "texto": bloques[i],
+                "duracion_estimada": duracion_media,
+            }
+            for i in range(len(bloques))
+        ],
+        "duracion_total": duracion_total
+    }
+
+    ruta_log = os.path.join(carpeta_salida, f"{timestamp}_log.json")
+    with open(ruta_log, "w", encoding="utf-8") as f:
+        json.dump(log_info, f, ensure_ascii=False, indent=4)
+
+    return {
+        "ruta_audio_final": ruta_audio_final,
+        "duraciones": duraciones,
+        "archivos_individuales": [],  # ahora no hay WAVs intermedios
         "carpeta_salida": carpeta_salida
     }
 
@@ -335,7 +448,7 @@ def normalize_chinese_punctuation(text):
 
 
 def prepare_chunk_text(
-    text, chunk_method: Optional[str] = None, chunk_max_word_num: int = 100, chunk_max_num_turns: int = 1
+        text, chunk_method: Optional[str] = None, chunk_max_word_num: int = 100, chunk_max_num_turns: int = 1
 ):
     """Chunk the text into smaller pieces. We will later feed the chunks one by one to the model.
 
@@ -382,7 +495,7 @@ def prepare_chunk_text(
         if chunk_max_num_turns > 1:
             merged_chunks = []
             for i in range(0, len(speaker_chunks), chunk_max_num_turns):
-                merged_chunk = "\n".join(speaker_chunks[i : i + chunk_max_num_turns])
+                merged_chunk = "\n".join(speaker_chunks[i: i + chunk_max_num_turns])
                 merged_chunks.append(merged_chunk)
             return merged_chunks
         return speaker_chunks
@@ -394,21 +507,15 @@ def prepare_chunk_text(
         paragraphs = text.split("\n\n")
         chunks = []
         for idx, paragraph in enumerate(paragraphs):
-            if language == "zh":
-                # For Chinese, we will chunk based on character count
-                words = list(jieba.cut(paragraph, cut_all=False))
-                for i in range(0, len(words), chunk_max_word_num):
-                    chunk = "".join(words[i : i + chunk_max_word_num])
-                    chunks.append(chunk)
-            else:
-                words = paragraph.split(" ")
-                for i in range(0, len(words), chunk_max_word_num):
-                    chunk = " ".join(words[i : i + chunk_max_word_num])
-                    chunks.append(chunk)
+            words = paragraph.split(" ")
+            for i in range(0, len(words), chunk_max_word_num):
+                chunk = " ".join(words[i: i + chunk_max_word_num])
+                chunks.append(chunk)
             chunks[-1] += "\n\n"
         return chunks
     else:
         raise ValueError(f"Unknown chunk method: {chunk_method}")
+
 
 def _build_system_message_with_audio_prompt(system_message):
     contents = []
@@ -417,7 +524,7 @@ def _build_system_message_with_audio_prompt(system_message):
         loc = system_message.find(AUDIO_PLACEHOLDER_TOKEN)
         contents.append(TextContent(system_message[:loc]))
         contents.append(AudioContent(audio_url=""))
-        system_message = system_message[loc + len(AUDIO_PLACEHOLDER_TOKEN) :]
+        system_message = system_message[loc + len(AUDIO_PLACEHOLDER_TOKEN):]
 
     if len(system_message) > 0:
         contents.append(TextContent(system_message))
@@ -430,14 +537,14 @@ def _build_system_message_with_audio_prompt(system_message):
 
 class HiggsAudioModelClient:
     def __init__(
-        self,
-        model_path,
-        audio_tokenizer,
-        device=None,
-        device_id=None,
-        max_new_tokens=2048,
-        kv_cache_lengths: List[int] = [1024, 4096, 8192],  # Multiple KV cache sizes,
-        use_static_kv_cache=False,
+            self,
+            model_path,
+            audio_tokenizer,
+            device=None,
+            device_id=None,
+            max_new_tokens=2048,
+            kv_cache_lengths: List[int] = [1024, 4096, 8192],  # Multiple KV cache sizes,
+            use_static_kv_cache=False,
     ):
         # Use explicit device if provided, otherwise try CUDA/MPS/CPU
         if device_id is not None:
@@ -519,22 +626,22 @@ class HiggsAudioModelClient:
 
     @torch.inference_mode()
     def generate(
-        self,
-        messages,
-        audio_ids,
-        chunked_text,
-        generation_chunk_buffer_size,
-        temperature=1.0,
-        top_k=50,
-        top_p=0.95,
-        ras_win_len=7,
-        ras_win_max_num_repeat=2,
-        seed=123,
-        *args,
-        **kwargs,
+            self,
+            messages,
+            audio_ids,
+            chunked_text,
+            generation_chunk_buffer_size,
+            temperature=1.0,
+            top_k=50,
+            top_p=0.95,
+            ras_win_len=7,
+            ras_win_max_num_repeat=2,
+            seed=123,
+            *args,
+            **kwargs,
     ):
         logger.info(f"[DEBUG] Texto final que llega al modelo: {chunked_text}")
-        
+
         if ras_win_len is not None and ras_win_len <= 0:
             ras_win_len = None
         sr = 24000
@@ -542,7 +649,7 @@ class HiggsAudioModelClient:
         generated_audio_ids = []
         generation_messages = []
         for idx, chunk_text in tqdm.tqdm(
-            enumerate(chunked_text), desc="Generating audio chunks", total=len(chunked_text)
+                enumerate(chunked_text), desc="Generating audio chunks", total=len(chunked_text)
         ):
             generation_messages.append(
                 Message(
@@ -627,7 +734,7 @@ class HiggsAudioModelClient:
             )
             if generation_chunk_buffer_size is not None and len(generated_audio_ids) > generation_chunk_buffer_size:
                 generated_audio_ids = generated_audio_ids[-generation_chunk_buffer_size:]
-                generation_messages = generation_messages[(-2 * generation_chunk_buffer_size) :]
+                generation_messages = generation_messages[(-2 * generation_chunk_buffer_size):]
 
         logger.info(f"========= Final Text output =========")
         logger.info(self._tokenizer.decode(outputs[0][0]))
@@ -668,28 +775,29 @@ def prepare_generation_context(scene_prompt, ref_audio, ref_audio_in_system_mess
                             st.info(f"Cargando perfil de voz desde: {CURR_DIR}/voice_examples/profile.yaml")
                             with open(f"{CURR_DIR}/voice_examples/profile.yaml", "r", encoding="utf-8") as f:
                                 voice_profile = yaml.safe_load(f)
-                            character_desc = voice_profile["profiles"][character_name[len("profile:") :].strip()]
+                            character_desc = voice_profile["profiles"][character_name[len("profile:"):].strip()]
                             speaker_desc.append(f"SPEAKER{spk_id}: {character_desc}")
                         except FileNotFoundError:
                             st.error(f"Archivo de perfil no encontrado: {CURR_DIR}/voice_examples/profile.yaml")
                             return None, None
                         except KeyError:
-                            st.error(f"Perfil de voz '{character_name[len('profile:'):].strip()}' no encontrado en el archivo de perfil.")
+                            st.error(
+                                f"Perfil de voz '{character_name[len('profile:'):].strip()}' no encontrado en el archivo de perfil.")
                             return None, None
                 else:
                     speaker_desc.append(f"SPEAKER{spk_id}: {AUDIO_PLACEHOLDER_TOKEN}")
             if scene_prompt:
                 system_message = (
-                    "Generate audio following instruction."
-                    "\n\n"
-                    f"<|scene_desc_start|>\n{scene_prompt}\n\n" + "\n".join(speaker_desc) + "\n<|scene_desc_end|>"
+                        "Generate audio following instruction."
+                        "\n\n"
+                        f"<|scene_desc_start|>\n{scene_prompt}\n\n" + "\n".join(speaker_desc) + "\n<|scene_desc_end|>"
                 )
             else:
                 system_message = (
-                    "Generate audio following instruction.\n\n"
-                    + f"<|scene_desc_start|>\n"
-                    + "\n".join(speaker_desc)
-                    + "\n<|scene_desc_end|>"
+                        "Generate audio following instruction.\n\n"
+                        + f"<|scene_desc_start|>\n"
+                        + "\n".join(speaker_desc)
+                        + "\n<|scene_desc_end|>"
                 )
             system_message = _build_system_message_with_audio_prompt(system_message)
         else:
@@ -767,21 +875,21 @@ def prepare_generation_context(scene_prompt, ref_audio, ref_audio_in_system_mess
 
 @st.cache_resource
 def get_model_client(
-    model_path,
-    audio_tokenizer_path,
-    device,
-    use_static_kv_cache,
-    max_new_tokens,
+        model_path,
+        audio_tokenizer_path,
+        device,
+        use_static_kv_cache,
+        max_new_tokens,
 ):
     # For MPS, use CPU for audio tokenizer due to embedding operation limitations
     audio_tokenizer_device = "cpu" if device == "mps" else device
     audio_tokenizer = load_higgs_audio_tokenizer(audio_tokenizer_path, device=audio_tokenizer_device)
-    
+
     # Disable static KV cache on MPS since it relies on CUDA graphs
     if "mps" in device and use_static_kv_cache:
         use_static_kv_cache = False
         st.warning("El caché estático KV se ha desactivado para el dispositivo MPS.")
-    
+
     device_id = int(device.split(":")[-1]) if "cuda" in device else None
 
     return HiggsAudioModelClient(
@@ -796,12 +904,12 @@ def get_model_client(
 
 def main():
     st.title("Generador de Audio HiggsAudio")
-    
+
     st.markdown("Crea audio a partir de texto utilizando el modelo HiggsAudio.")
 
     # --- Configuración del Modelo y Dispositivo ---
     st.header("🎙️ Generar narración completa con Higgs Audio V2")
-    
+
     col1, col2 = st.columns(2)
     with col1:
         model_path = st.text_input(
@@ -843,7 +951,7 @@ def main():
         height=250,
         help="Introduce el texto que quieres convertir en audio. Usa etiquetas [SPEAKER*] para múltiples voces."
     )
-    
+
     st.subheader("Prompts")
     col3, col4 = st.columns(2)
     with col3:
@@ -858,7 +966,7 @@ def main():
             value="belinda,chadwick",
             help="Nombres de prompts de voz separados por comas. (ej: 'belinda,chadwick'). Asume que los archivos existen en la carpeta `voice_prompts`."
         )
-    
+
     ref_audio_in_system_message = st.checkbox(
         "Incluir prompts de voz en el mensaje del sistema",
         value=True,
@@ -893,7 +1001,7 @@ def main():
                 min_value=0.0, max_value=1.0, value=0.95, step=0.05,
                 help="Tokens más probables cuyas probabilidades suman 'top_p'."
             )
-        
+
         with col6:
             chunk_method = st.selectbox(
                 "Método de segmentación",
@@ -971,10 +1079,11 @@ def main():
 
             st.subheader("⏱️ Duraciones por bloque:")
             for i, dur in enumerate(resultados["duraciones"]):
-                st.write(f"🔊 Bloque {i+1}: {dur:.2f} segundos")
+                st.write(f"🔊 Bloque {i + 1}: {dur:.2f} segundos")
             duracion_total = sum(resultados["duraciones"])
             st.info(f"🎧 Duración total de la narración: {duracion_total:.2f} segundos")
-            st.download_button("⬇️ Descargar audio final", data=open(resultados["ruta_audio_final"], "rb"), file_name="narracion_completa.wav")                                            
+            st.download_button("⬇️ Descargar audio final", data=open(resultados["ruta_audio_final"], "rb"),
+                               file_name="narracion_completa.wav")
     if st.button("Generar Audio", use_container_width=True):
         if not transcript:
             st.error("Por favor, introduce una transcripción para generar audio.")
@@ -982,7 +1091,7 @@ def main():
 
         with st.spinner("Cargando modelo y generando audio..."):
             # Lógica principal del script original, adaptada
-            
+
             model_client = get_model_client(
                 model_path=model_path,
                 audio_tokenizer_path="bosonai/higgs-audio-v2-tokenizer",
@@ -1017,9 +1126,9 @@ def main():
             lines = processed_transcript.split("\n")
             processed_transcript = "\n".join([" ".join(line.split()) for line in lines if line.strip()])
             processed_transcript = processed_transcript.strip()
-            if not any([processed_transcript.endswith(c) for c in [".", "!", "?", ",", ";", '"', "'", "</SE_e>", "</SE>"]]):
+            if not any([processed_transcript.endswith(c) for c in
+                        [".", "!", "?", ",", ";", '"', "'", "</SE_e>", "</SE>"]]):
                 processed_transcript += "."
-
 
             messages, audio_ids = prepare_generation_context(
                 scene_prompt=scene_prompt,
@@ -1028,8 +1137,8 @@ def main():
                 audio_tokenizer=model_client._audio_tokenizer,
                 speaker_tags=speaker_tags,
             )
-            
-            if messages is None: # Si hay un error en los prompts, el prepare_generation_context devuelve None
+
+            if messages is None:  # Si hay un error en los prompts, el prepare_generation_context devuelve None
                 st.error("Error en la preparación del contexto de generación. Revisa los prompts de voz y escena.")
                 return
 
@@ -1052,7 +1161,7 @@ def main():
                 ras_win_max_num_repeat=2,
                 seed=seed,
             )
-        
+
         st.success("¡Audio generado con éxito!")
 
         # Reproducir y descargar el audio
@@ -1065,11 +1174,11 @@ def main():
             file_name="generation.wav",
             mime="audio/wav"
         )
-        
+
         # Mostrar la transcripción final del modelo
         st.subheader("Transcripción final del modelo")
         st.text_area("Texto de salida:", value=text_output, height=200, disabled=True)
-    
+
 
 if __name__ == "__main__":
     main()
