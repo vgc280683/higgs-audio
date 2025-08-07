@@ -1,0 +1,38 @@
+{
+    "timestamp": "05082025_171259",
+    "scene_prompt": "Socrates, the philosopher, is speaking lively with me in a market in Athens. His tone is loud but sincere, with a pinch of irony but without losing the good humour.",
+    "language": "es",
+    "preset": "narration",
+    "voice_name": "socrates",
+    "voice_path": "voice_examples/socrates",
+    "output_dir": "resultado_narracion\\05082025_171259",
+    "num_bloques": 5,
+    "bloques": [
+        {
+            "bloque": 1,
+            "texto": "¿Presentarme? ¿No será que te interesa saber lo que soy para poder situarme dentro de tus esquemas? Dime, Víctor: ¿qué hace a un hombre ser lo que es? ¿Su oficio, su reputación… o su manera de vivir? No, amigo Víctor, mi lugar de nacimiento no influye en cómo pienso.",
+            "duracion_estimada": 925.5062150001526
+        },
+        {
+            "bloque": 2,
+            "texto": "Soy nativo de Atenas, hijo de Sofrónicos, un escultor, y una mujer llamada Fenareta, una comadrona. Sin embargo, mi forma de pensar se desarrolló a través del diálogo y la reflexión, no por razones puramente biográficas. Sin duda. Mi padre tallaba el mármol. Mi madre ayudaba a dar a luz.",
+            "duracion_estimada": 925.5062150001526
+        },
+        {
+            "bloque": 3,
+            "texto": "Y yo, al crecer, decidí unir ambos oficios: esculpir las almas… y asistir a los partos del pensamiento. A eso lo llamaron después \"mayéutica\". Pero no es magia. Solo preguntas. Preguntas bien hechas, como quien raspa con el cincel o empuja en el momento justo. Fue un oráculo quién lo inició.",
+            "duracion_estimada": 925.5062150001526
+        },
+        {
+            "bloque": 4,
+            "texto": "En Delfos, dijeron que yo era el más sabio de los hombres. Me reí. Yo no sabía nada. Y sin embargo, esa fue la clave: comprendí que saber que no sabes es un punto de partida. Desde entonces, empecé a preguntar. No para enseñar… sino para aprender.",
+            "duracion_estimada": 925.5062150001526
+        },
+        {
+            "bloque": 5,
+            "texto": "Y cada vez que alguien creía tener respuestas, yo solo tenía otra pregunta.",
+            "duracion_estimada": 925.5062150001526
+        }
+    ],
+    "duracion_total": 4627.531075000763
+}
