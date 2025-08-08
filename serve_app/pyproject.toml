@@ -21,7 +21,8 @@ dependencies = [
 ]
 
 [project.scripts]
-higgs-audio-serve = "higgs_audio_app.serve:main"
+higgs-audio-serve = "higgs_audio_app.app:main"
+
 
 [tool.setuptools.packages.find]
 where = ["src"]
