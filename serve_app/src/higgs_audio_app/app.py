@@ -1,3 +1,21 @@
+# --- begin: ensure repo root is on sys.path ---
+import sys, os
+from pathlib import Path
+
+_here = Path(__file__).resolve()
+# Busca hacia arriba la carpeta que contiene 'boson_multimodal'
+root = None
+for p in [_here] + list(_here.parents):
+    if (p / "boson_multimodal").is_dir():
+        root = p
+        break
+# Si estamos en serve_app/src/higgs_audio_app/app.py, la raíz real suele estar 3-4 niveles arriba.
+# Este buscador lo localiza robustamente.
+if root and str(root) not in sys.path:
+    sys.path.insert(0, str(root))
+# --- end: ensure repo root is on sys.path ---
+
+
 import copy
 import io
 import os
