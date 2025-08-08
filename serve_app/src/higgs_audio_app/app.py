@@ -903,6 +903,9 @@ def get_model_client(
 
 
 def main():
+    logger.info("Higgs Audio App arrancando…")
+    print("Higgs Audio App lista. Implementa aquí tu lógica de arranque.")
+
     st.title("Generador de Audio HiggsAudio")
 
     st.markdown("Crea audio a partir de texto utilizando el modelo HiggsAudio.")

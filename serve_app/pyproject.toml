@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "higgs-audio-app"
+version = "0.1.0"
+description = "App encima de Higgs Audio (instalable por subdirectorio)"
+requires-python = ">=3.10"
+dependencies = [
+  "transformers==4.41.2",
+  "accelerate==0.33.0",
+  "soundfile==0.12.1",
+  "loguru==0.7.2",
+  "tqdm==4.66.4",
+  "numpy>=1.24,<2",
+  "pydub>=0.25.1",
+  # añade gradio/streamlit si aplica
+  # "gradio>=4.0.0",
+  "streamlit>=1.33.0",
+]
+
+[project.scripts]
+higgs-audio-serve = "higgs_audio_app.serve:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

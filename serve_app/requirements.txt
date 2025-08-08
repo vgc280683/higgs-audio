@@ -1,0 +1,8 @@
+transformers==4.41.2
+accelerate==0.33.0
+soundfile==0.12.1
+loguru==0.7.2
+tqdm==4.66.4
+numpy>=1.24,<2
+pydub>=0.25.1
+streamlit>=1.33.0
