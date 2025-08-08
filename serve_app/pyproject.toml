@@ -18,6 +18,7 @@ dependencies = [
   # añade gradio/streamlit si aplica
   # "gradio>=4.0.0",
   "streamlit>=1.33.0",
+  "boson_multimodal @ git+https://github.com/vgc280683/higgs-audio.git@main"
 ]
 
 [project.scripts]
