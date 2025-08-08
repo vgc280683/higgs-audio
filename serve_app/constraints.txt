@@ -1,4 +1,10 @@
+# Stack elegido (Opción A): torch 2.3.1 + cu121
 torch==2.3.1
+# Asegura compatibilidad con torch 2.3.1
+torchvision==0.18.1
+# Torchaudio a juego
 torchaudio==2.3.1
+
+# Resto de pins críticos
 transformers==4.41.2
 accelerate==0.33.0
