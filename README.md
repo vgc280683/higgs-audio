@@ -290,6 +290,9 @@ We report the word-error-rate (WER) and the geometric mean between intra-speaker
 | [nari-labs/Dia-1.6B-0626](https://huggingface.co/nari-labs/Dia-1.6B-0626)         | \-                       | \-             | 17.62      | 63.15          | 19.46               | **61.14**          |
 | Higgs Audio v2 (base)     | **18.88**                    | **51.95**          | 11.89      | **67.92**              | **14.65**               | 55.28              |
 
+## Contribution and Support
+
+For contribution and support guidelines, please see the support guidelines at [SUPPORT_GUIDELINES.md](SUPPORT_GUIDELINES.md).
 
 ## Citation
 
@@ -308,3 +311,8 @@ If you feel the repository is helpful, please kindly cite as:
 ## Third-Party Licenses
 
 The `boson_multimodal/audio_processing/` directory contains code derived from third-party repositories, primarily from [xcodec](https://github.com/zhenye234/xcodec). Please see the [`LICENSE`](boson_multimodal/audio_processing/LICENSE) in that directory for complete attribution and licensing information.
+
+## We Are Hiring!
+
+If you are passionate about multimodal AI, speech/audio models, or large-scale systems, 
+check out our open positions at [Boson AI Careers](https://jobs.lever.co/bosonai).
